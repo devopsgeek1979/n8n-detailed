@@ -1,0 +1,206 @@
+{
+  "name": "AWS-Azure Node Utilization Monitor & L3 Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 * * * *" }]
+        }
+      },
+      "id": "cloud-cron",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [200, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate the last 60-minute time window in ISO8601\nconst now   = new Date();\nconst start = new Date(now.getTime() - 60 * 60 * 1000);\nreturn [{\n  json: {\n    endTime:   now.toISOString(),\n    startTime: start.toISOString(),\n    endEpoch:  Math.floor(now.getTime() / 1000),\n    startEpoch: Math.floor(start.getTime() / 1000)\n  }\n}];\n"
+      },
+      "id": "set-time-window",
+      "name": "Set Time Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://monitoring.googleapis.com/v3/projects/placeholder",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [{
+            "name": "filter",
+            "value": "metric.type=\"compute.googleapis.com/instance/cpu/utilization\""
+          }]
+        },
+        "options": { "timeout": 20000 }
+      },
+      "id": "aws-ec2-cpu",
+      "name": "AWS: Get EC2 CPU via CloudWatch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 220],
+      "credentials": { "httpHeaderAuth": { "id": "aws-monitoring", "name": "aws-monitoring" } },
+      "notes": "Replace URL with real CloudWatch endpoint: https://monitoring.us-east-1.amazonaws.com"
+    },
+    {
+      "parameters": {
+        "url": "https://cloudwatch.amazonaws.com/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/x-www-form-urlencoded" },
+            { "name": "X-Amz-Target", "value": "GraniteServiceVersion20100801.GetMetricData" }
+          ]
+        },
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"MetricDataQueries\": [\n    {\n      \"Id\": \"mem\",\n      \"MetricStat\": {\n        \"Metric\": { \"Namespace\": \"CWAgent\", \"MetricName\": \"mem_used_percent\" },\n        \"Period\": 300,\n        \"Stat\": \"Average\"\n      }\n    }\n  ],\n  \"StartTime\": \"{{ $json.startTime }}\",\n  \"EndTime\":   \"{{ $json.endTime }}\"\n}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "aws-ec2-mem",
+      "name": "AWS: Get EC2 Memory via CloudWatch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 380],
+      "credentials": { "httpHeaderAuth": { "id": "aws-monitoring", "name": "aws-monitoring" } }
+    },
+    {
+      "parameters": {
+        "url": "https://management.azure.com/subscriptions/{{ $env.AZURE_SUBSCRIPTION_ID }}/providers/microsoft.insights/metrics?api-version=2021-05-01&metricnames=Percentage%20CPU&timespan={{ $json.startTime }}/{{ $json.endTime }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $env.AZURE_BEARER_TOKEN }}" }]
+        },
+        "options": { "timeout": 20000 }
+      },
+      "id": "azure-cpu",
+      "name": "Azure: Get VM CPU Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 540],
+      "credentials": { "httpHeaderAuth": { "id": "azure-monitoring", "name": "azure-monitoring" } }
+    },
+    {
+      "parameters": {
+        "url": "https://management.azure.com/subscriptions/{{ $env.AZURE_SUBSCRIPTION_ID }}/providers/microsoft.insights/metrics?api-version=2021-05-01&metricnames=Available%20Memory%20Bytes&timespan={{ $json.startTime }}/{{ $json.endTime }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $env.AZURE_BEARER_TOKEN }}" }]
+        },
+        "options": { "timeout": 20000 }
+      },
+      "id": "azure-mem",
+      "name": "Azure: Get VM Memory Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 700],
+      "credentials": { "httpHeaderAuth": { "id": "azure-monitoring", "name": "azure-monitoring" } }
+    },
+    {
+      "parameters": {
+        "mode": "passThrough",
+        "output": "input1"
+      },
+      "id": "merge-metrics",
+      "name": "Merge Cloud Metrics",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [920, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyse all metrics and detect performance issues\nconst CPU_THRESHOLD_WARN  = parseInt($env.CPU_WARN_THRESHOLD  || '70');\nconst CPU_THRESHOLD_CRIT  = parseInt($env.CPU_CRIT_THRESHOLD  || '90');\nconst MEM_THRESHOLD_WARN  = parseInt($env.MEM_WARN_THRESHOLD  || '75');\nconst MEM_THRESHOLD_CRIT  = parseInt($env.MEM_CRIT_THRESHOLD  || '95');\n\n// Parse AWS CloudWatch responses (simplified)\nconst awsCpuRaw = $('AWS: Get EC2 CPU via CloudWatch').first().json;\nconst awsMemRaw = $('AWS: Get EC2 Memory via CloudWatch').first().json;\nconst azCpuRaw  = $('Azure: Get VM CPU Metrics').first().json;\nconst azMemRaw  = $('Azure: Get VM Memory Metrics').first().json;\n\n// Normalise to a common schema\nfunction parseAwsMetrics(raw, metricName) {\n  const results = raw?.MetricDataResults || raw?.Datapoints || [];\n  if (!results.length) return [{ instance: 'aws-demo-node', metric: metricName, value: 0, unit: '%', source: 'AWS CloudWatch' }];\n  return results.map((r, i) => ({\n    instance: r.Label || `aws-instance-${i}`,\n    metric:   metricName,\n    value:    r.Values?.[0] ?? r.Average ?? 0,\n    unit:     '%',\n    source:   'AWS CloudWatch'\n  }));\n}\n\nfunction parseAzureMetrics(raw, metricName) {\n  const values = raw?.value || [];\n  if (!values.length) return [{ instance: 'azure-demo-node', metric: metricName, value: 0, unit: '%', source: 'Azure Monitor' }];\n  return values.map(v => ({\n    instance: v.name?.localizedValue || v.id || 'azure-vm',\n    metric:   metricName,\n    value:    v.timeseries?.[0]?.data?.slice(-1)?.[0]?.average ?? 0,\n    unit:     metricName === 'Memory' ? 'bytes' : '%',\n    source:   'Azure Monitor'\n  }));\n}\n\nconst metrics = [\n  ...parseAwsMetrics(awsCpuRaw, 'CPU'),\n  ...parseAwsMetrics(awsMemRaw, 'Memory'),\n  ...parseAzureMetrics(azCpuRaw, 'CPU'),\n  ...parseAzureMetrics(azMemRaw, 'Memory')\n];\n\nconst issues = metrics.filter(m => {\n  if (m.metric === 'CPU')    return m.value >= CPU_THRESHOLD_WARN;\n  if (m.metric === 'Memory') return m.value >= MEM_THRESHOLD_WARN;\n  return false;\n}).map(m => ({\n  ...m,\n  severity: (() => {\n    if (m.metric === 'CPU')    return m.value >= CPU_THRESHOLD_CRIT  ? '🔴 CRITICAL' : '🟡 WARNING';\n    if (m.metric === 'Memory') return m.value >= MEM_THRESHOLD_CRIT  ? '🔴 CRITICAL' : '🟡 WARNING';\n    return '⚪ INFO';\n  })()\n}));\n\nconst hasCritical = issues.some(i => i.severity.includes('CRITICAL'));\nconst now = new Date().toUTCString();\n\n// Build rows\nconst allRows = metrics.map(m => {\n  let badge = '🟢';\n  if (m.metric === 'CPU'    && m.value >= CPU_THRESHOLD_CRIT) badge = '🔴';\n  else if (m.metric === 'CPU'    && m.value >= CPU_THRESHOLD_WARN) badge = '🟡';\n  else if (m.metric === 'Memory' && m.value >= MEM_THRESHOLD_CRIT) badge = '🔴';\n  else if (m.metric === 'Memory' && m.value >= MEM_THRESHOLD_WARN) badge = '🟡';\n  return `<tr><td>${m.source}</td><td>${m.instance}</td><td>${m.metric}</td><td>${badge} ${m.value.toFixed ? m.value.toFixed(2) : m.value}${m.unit}</td></tr>`;\n}).join('');\n\nconst issueRows = issues.length\n  ? issues.map(i => `<tr style='background:#fff3cd'><td>${i.source}</td><td>${i.instance}</td><td>${i.metric}</td><td>${i.severity}</td><td>${i.value.toFixed ? i.value.toFixed(2) : i.value}${i.unit}</td></tr>`).join('')\n  : `<tr><td colspan='5' style='color:green'>✅ No performance issues detected</td></tr>`;\n\nconst status = hasCritical ? '🔴 CRITICAL PERFORMANCE ISSUE' : issues.length ? '🟡 PERFORMANCE WARNING' : '🟢 ALL NODES HEALTHY';\n\nconst html = `<!DOCTYPE html><html><head><style>\nbody{font-family:Arial,sans-serif;padding:24px;color:#222}\nh1{color:#1a1a2e}h2{color:#16213e;margin-top:30px}\ntable{border-collapse:collapse;width:100%;margin-top:10px}\nth{background:#16213e;color:white;padding:8px 12px;text-align:left}\ntd{border:1px solid #ddd;padding:8px 12px}\ntr:nth-child(even){background:#f4f4f4}\n</style></head><body>\n<h1>☁️ Cloud Node Utilization Report</h1>\n<p><strong>Generated:</strong> ${now}</p>\n<p><strong>Period:</strong> Last 60 minutes</p>\n<p><strong>Overall Status:</strong> ${status}</p>\n<p><strong>Thresholds:</strong> CPU Warn=${CPU_THRESHOLD_WARN}% Crit=${CPU_THRESHOLD_CRIT}% | Mem Warn=${MEM_THRESHOLD_WARN}% Crit=${MEM_THRESHOLD_CRIT}%</p>\n<h2>🚨 Performance Issues (${issues.length})</h2>\n<table><tr><th>Source</th><th>Instance</th><th>Metric</th><th>Severity</th><th>Value</th></tr>${issueRows}</table>\n<h2>📊 All Metrics (${metrics.length} data points)</h2>\n<table><tr><th>Source</th><th>Instance</th><th>Metric</th><th>Value</th></tr>${allRows}</table>\n<hr/><p style='font-size:12px;color:#666'>Auto-generated by n8n Cloud Monitoring Workflow</p>\n</body></html>`;\n\nreturn [{ json: { html, subject: `[Cloud Monitor] ${status} — ${now}`, issues: issues.length, hasCritical, status } }];\n"
+      },
+      "id": "analyse-metrics",
+      "name": "Analyse & Build Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1160, 460]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.issues }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ]
+        }
+      },
+      "id": "has-issues",
+      "name": "Any Issues?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1380, 460]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail":   "={{ $env.L3_TEAM_EMAIL }}",
+        "subject":   "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html":      "={{ $json.html }}",
+        "options":   { "ccEmail": "={{ $env.L3_CC_EMAIL }}" }
+      },
+      "id": "send-alert",
+      "name": "Send Performance Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1620, 340],
+      "credentials": { "smtp": { "id": "smtp-l3-team", "name": "smtp-l3-team" } }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail":   "={{ $env.L3_TEAM_EMAIL }}",
+        "subject":   "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html":      "={{ $json.html }}"
+      },
+      "id": "send-ok",
+      "name": "Send Healthy Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1620, 580],
+      "credentials": { "smtp": { "id": "smtp-l3-team", "name": "smtp-l3-team" } }
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [[{ "node": "Set Time Window", "type": "main", "index": 0 }]]
+    },
+    "Set Time Window": {
+      "main": [[
+        { "node": "AWS: Get EC2 CPU via CloudWatch",   "type": "main", "index": 0 },
+        { "node": "AWS: Get EC2 Memory via CloudWatch","type": "main", "index": 0 },
+        { "node": "Azure: Get VM CPU Metrics",         "type": "main", "index": 0 },
+        { "node": "Azure: Get VM Memory Metrics",      "type": "main", "index": 0 }
+      ]]
+    },
+    "AWS: Get EC2 CPU via CloudWatch":    { "main": [[{ "node": "Merge Cloud Metrics", "type": "main", "index": 0 }]] },
+    "AWS: Get EC2 Memory via CloudWatch": { "main": [[{ "node": "Merge Cloud Metrics", "type": "main", "index": 1 }]] },
+    "Azure: Get VM CPU Metrics":          { "main": [[{ "node": "Merge Cloud Metrics", "type": "main", "index": 2 }]] },
+    "Azure: Get VM Memory Metrics":       { "main": [[{ "node": "Merge Cloud Metrics", "type": "main", "index": 3 }]] },
+    "Merge Cloud Metrics":  { "main": [[{ "node": "Analyse & Build Report", "type": "main", "index": 0 }]] },
+    "Analyse & Build Report": { "main": [[{ "node": "Any Issues?", "type": "main", "index": 0 }]] },
+    "Any Issues?": {
+      "main": [
+        [{ "node": "Send Performance Alert", "type": "main", "index": 0 }],
+        [{ "node": "Send Healthy Report",    "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "tags": ["cloud", "aws", "azure", "monitoring", "l3"],
+  "triggerCount": 1,
+  "meta": { "templateCredsSetupCompleted": false }
+}

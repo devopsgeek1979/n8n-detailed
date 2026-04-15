@@ -1,0 +1,209 @@
+{
+  "name": "AI-Powered Social Campaign Creator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "social-campaign",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook: Campaign Brief",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 400],
+      "webhookId": "social-campaign-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate and normalise the incoming campaign brief\nconst body = $input.first().json.body || $input.first().json;\nconst brand    = (body.brand    || '').trim();\nconst brief    = (body.brief    || '').trim();\nconst tone     = (body.tone     || 'professional').toLowerCase();\nconst hashtags = (body.hashtags || '').trim();\nconst cta      = (body.cta      || '').trim();\n\nif (!brand || !brief) {\n  throw new Error('Missing required fields: brand and brief are required');\n}\n\nreturn [{ json: { brand, brief, tone, hashtags, cta, timestamp: new Date().toISOString() } }];\n"
+      },
+      "id": "validate-brief",
+      "name": "Validate Brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 400]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "message",
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert social media copywriter. Generate platform-optimised posts in JSON format."
+            },
+            {
+              "role": "user",
+              "content": "=Create three social media posts for the brand \"{{ $json.brand }}\".\n\nCampaign Brief: {{ $json.brief }}\nTone: {{ $json.tone }}\nHashtags: {{ $json.hashtags }}\nCall-to-Action: {{ $json.cta }}\n\nReturn ONLY valid JSON with this exact structure:\n{\n  \"twitter\": { \"text\": \"tweet text max 280 chars\", \"hashtags\": [\"tag1\",\"tag2\"] },\n  \"linkedin\": { \"text\": \"professional LinkedIn post 150-300 words\", \"hashtags\": [\"tag1\",\"tag2\"] },\n  \"facebook\": { \"text\": \"engaging Facebook post 100-200 words\", \"hashtags\": [\"tag1\",\"tag2\"] }\n}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.7, "maxTokens": 1200 }
+      },
+      "id": "openai-generate",
+      "name": "OpenAI: Generate Posts",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.3,
+      "position": [660, 400],
+      "credentials": { "openAiApi": { "id": "openai-campaigns", "name": "openai-campaigns" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and parse the JSON returned by OpenAI\nconst raw = $input.first().json?.message?.content || $input.first().json?.choices?.[0]?.message?.content || '';\nlet posts;\ntry {\n  // Strip markdown code fences if present\n  const cleaned = raw.replace(/```json\\n?/g,'').replace(/```\\n?/g,'').trim();\n  posts = JSON.parse(cleaned);\n} catch(e) {\n  throw new Error('Failed to parse OpenAI JSON response: ' + raw.substring(0, 200));\n}\n\nconst brief = $('Validate Brief').first().json;\n\nreturn [{ json: { ...brief, posts } }];\n"
+      },
+      "id": "parse-posts",
+      "name": "Parse AI Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://api.twitter.com/2/tweets",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $env.TWITTER_BEARER_TOKEN }}" }]
+        },
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"text\": \"{{ $json.posts.twitter.text }} {{ $json.posts.twitter.hashtags.map(h => '#'+h).join(' ') }}\" }",
+        "options": { "timeout": 15000 }
+      },
+      "id": "post-twitter",
+      "name": "Post to Twitter/X",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 220],
+      "credentials": { "httpHeaderAuth": { "id": "twitter-brand", "name": "twitter-brand" } }
+    },
+    {
+      "parameters": {
+        "url": "https://api.linkedin.com/v2/ugcPosts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $env.LINKEDIN_ACCESS_TOKEN }}" }]
+        },
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"author\": \"urn:li:person:{{ $env.LINKEDIN_AUTHOR_ID }}\",\n  \"lifecycleState\": \"PUBLISHED\",\n  \"specificContent\": {\n    \"com.linkedin.ugc.ShareContent\": {\n      \"shareCommentary\": { \"text\": \"{{ $json.posts.linkedin.text }}\" },\n      \"shareMediaCategory\": \"NONE\"\n    }\n  },\n  \"visibility\": { \"com.linkedin.ugc.MemberNetworkVisibility\": \"PUBLIC\" }\n}",
+        "options": { "timeout": 15000 }
+      },
+      "id": "post-linkedin",
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 400],
+      "credentials": { "httpHeaderAuth": { "id": "linkedin-brand", "name": "linkedin-brand" } }
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v20.0/{{ $env.FACEBOOK_PAGE_ID }}/feed",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": \"{{ $json.posts.facebook.text }} {{ $json.posts.facebook.hashtags.map(h => '#'+h).join(' ') }}\",\n  \"access_token\": \"{{ $env.FACEBOOK_PAGE_ACCESS_TOKEN }}\"\n}",
+        "options": { "timeout": 15000 }
+      },
+      "id": "post-facebook",
+      "name": "Post to Facebook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 580],
+      "credentials": { "httpHeaderAuth": { "id": "facebook-brand", "name": "facebook-brand" } }
+    },
+    {
+      "parameters": {
+        "mode": "passThrough",
+        "output": "input1"
+      },
+      "id": "merge-results",
+      "name": "Collect Post Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1380, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data  = $('Parse AI Output').first().json;\nconst tw    = $('Post to Twitter/X').first().json;\nconst li    = $('Post to LinkedIn').first().json;\nconst fb    = $('Post to Facebook').first().json;\n\nreturn [{\n  json: {\n    timestamp:      data.timestamp,\n    brand:          data.brand,\n    brief_summary:  data.brief.substring(0, 100),\n    twitter_id:     tw?.data?.id || tw?.id || 'unknown',\n    twitter_text:   data.posts?.twitter?.text || '',\n    linkedin_id:    li?.id || 'unknown',\n    linkedin_text:  data.posts?.linkedin?.text?.substring(0, 120) || '',\n    facebook_id:    fb?.id || 'unknown',\n    facebook_text:  data.posts?.facebook?.text?.substring(0, 120) || '',\n    tone:           data.tone,\n    status:         'PUBLISHED'\n  }\n}];\n"
+      },
+      "id": "build-log-row",
+      "name": "Build Log Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1620, 400]
+    },
+    {
+      "parameters": {
+        "resource": "spreadsheet",
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.GSHEETS_CAMPAIGNS_ID }}" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Campaign Log" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp":       "={{ $json.timestamp }}",
+            "Brand":           "={{ $json.brand }}",
+            "Brief Summary":   "={{ $json.brief_summary }}",
+            "Tone":            "={{ $json.tone }}",
+            "Twitter Post ID": "={{ $json.twitter_id }}",
+            "Twitter Text":    "={{ $json.twitter_text }}",
+            "LinkedIn Post ID":"={{ $json.linkedin_id }}",
+            "LinkedIn Text":   "={{ $json.linkedin_text }}",
+            "Facebook Post ID":"={{ $json.facebook_id }}",
+            "Facebook Text":   "={{ $json.facebook_text }}",
+            "Status":          "={{ $json.status }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-to-sheets",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1860, 400],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "gsheets-campaigns", "name": "gsheets-campaigns" } }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Respond: Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2080, 400]
+    }
+  ],
+  "connections": {
+    "Webhook: Campaign Brief": { "main": [[{ "node": "Validate Brief",         "type": "main", "index": 0 }]] },
+    "Validate Brief":          { "main": [[{ "node": "OpenAI: Generate Posts",  "type": "main", "index": 0 }]] },
+    "OpenAI: Generate Posts":  { "main": [[{ "node": "Parse AI Output",         "type": "main", "index": 0 }]] },
+    "Parse AI Output": {
+      "main": [[
+        { "node": "Post to Twitter/X", "type": "main", "index": 0 },
+        { "node": "Post to LinkedIn",  "type": "main", "index": 0 },
+        { "node": "Post to Facebook",  "type": "main", "index": 0 }
+      ]]
+    },
+    "Post to Twitter/X": { "main": [[{ "node": "Collect Post Results", "type": "main", "index": 0 }]] },
+    "Post to LinkedIn":  { "main": [[{ "node": "Collect Post Results", "type": "main", "index": 1 }]] },
+    "Post to Facebook":  { "main": [[{ "node": "Collect Post Results", "type": "main", "index": 2 }]] },
+    "Collect Post Results": { "main": [[{ "node": "Build Log Row", "type": "main", "index": 0 }]] },
+    "Build Log Row":        { "main": [[{ "node": "Log to Google Sheets", "type": "main", "index": 0 }]] },
+    "Log to Google Sheets": { "main": [[{ "node": "Respond: Success",     "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "tags": ["social-media", "ai", "openai", "twitter", "linkedin", "facebook"],
+  "triggerCount": 1,
+  "meta": { "templateCredsSetupCompleted": false }
+}

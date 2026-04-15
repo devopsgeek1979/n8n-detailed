@@ -1,0 +1,174 @@
+{
+  "name": "Kubernetes - OpenShift Health Check & L3 Email Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 */6 * * *" }]
+        }
+      },
+      "id": "k8s-cron-trigger",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.K8S_API_URL }}/api/v1/nodes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } },
+          "timeout": 15000
+        }
+      },
+      "id": "get-nodes",
+      "name": "Get All Nodes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 180],
+      "credentials": { "httpHeaderAuth": { "id": "k8s-api-token", "name": "k8s-api-token" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.K8S_API_URL }}/api/v1/pods?fieldSelector=status.phase!=Running",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": { "timeout": 15000 }
+      },
+      "id": "get-failed-pods",
+      "name": "Get Failed/Pending Pods",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 320],
+      "credentials": { "httpHeaderAuth": { "id": "k8s-api-token", "name": "k8s-api-token" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.K8S_API_URL }}/apis/apps/v1/deployments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": { "timeout": 15000 }
+      },
+      "id": "get-deployments",
+      "name": "Get Deployments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 460],
+      "credentials": { "httpHeaderAuth": { "id": "k8s-api-token", "name": "k8s-api-token" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.K8S_API_URL }}/api/v1/namespaces",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": { "timeout": 15000 }
+      },
+      "id": "get-namespaces",
+      "name": "Get Namespaces",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 600],
+      "credentials": { "httpHeaderAuth": { "id": "k8s-api-token", "name": "k8s-api-token" } }
+    },
+    {
+      "parameters": {
+        "mode": "passThrough",
+        "output": "input1"
+      },
+      "id": "wait-all",
+      "name": "Merge All Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [720, 380]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build a detailed health report from all K8s API responses\nconst nodesData   = $('Get All Nodes').first().json;\nconst podsData    = $('Get Failed/Pending Pods').first().json;\nconst depData     = $('Get Deployments').first().json;\nconst nsData      = $('Get Namespaces').first().json;\n\nconst clusterNodes = (nodesData.items || []).map(n => {\n  const conditions = (n.status?.conditions || []);\n  const ready = conditions.find(c => c.type === 'Ready');\n  const mem   = n.status?.allocatable?.memory || 'N/A';\n  const cpu   = n.status?.allocatable?.cpu || 'N/A';\n  return {\n    name:   n.metadata?.name,\n    status: ready?.status === 'True' ? '✅ Ready' : '❌ Not Ready',\n    cpu,\n    memory: mem,\n    role:   Object.keys(n.metadata?.labels || {}).find(k => k.includes('node-role')) || 'worker',\n    os:     n.status?.nodeInfo?.osImage || 'N/A',\n    kernel: n.status?.nodeInfo?.kernelVersion || 'N/A'\n  };\n});\n\nconst unhealthyNodes = clusterNodes.filter(n => n.status.includes('❌'));\n\nconst failedPods = (podsData.items || []).map(p => ({\n  namespace: p.metadata?.namespace,\n  name:      p.metadata?.name,\n  phase:     p.status?.phase,\n  reason:    p.status?.reason || p.status?.conditions?.[0]?.reason || 'Unknown',\n  restarts:  p.status?.containerStatuses?.[0]?.restartCount ?? 0\n}));\n\nconst deployments = (depData.items || []).map(d => {\n  const desired   = d.spec?.replicas || 0;\n  const ready     = d.status?.readyReplicas || 0;\n  return {\n    namespace: d.metadata?.namespace,\n    name:      d.metadata?.name,\n    desired,\n    ready,\n    health:    ready === desired ? '✅ Healthy' : `⚠️ ${ready}/${desired}`\n  };\n});\n\nconst namespaces = (nsData.items || []).map(ns => ns.metadata?.name);\n\nconst now = new Date().toUTCString();\nconst nodeRows = clusterNodes.map(n =>\n  `<tr><td>${n.name}</td><td>${n.role}</td><td>${n.status}</td><td>${n.cpu}</td><td>${n.memory}</td><td>${n.os}</td></tr>`\n).join('');\n\nconst podRows = failedPods.length\n  ? failedPods.map(p =>\n      `<tr style='background:#fff3cd'><td>${p.namespace}</td><td>${p.name}</td><td>${p.phase}</td><td>${p.reason}</td><td>${p.restarts}</td></tr>`\n    ).join('')\n  : `<tr><td colspan='5' style='color:green'>✅ All pods running healthy</td></tr>`;\n\nconst depRows = deployments.map(d =>\n  `<tr><td>${d.namespace}</td><td>${d.name}</td><td>${d.desired}</td><td>${d.ready}</td><td>${d.health}</td></tr>`\n).join('');\n\nconst severity = unhealthyNodes.length > 0 || failedPods.length > 0 ? '🔴 ACTION REQUIRED' : '🟢 ALL SYSTEMS HEALTHY';\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; padding: 24px; color: #222; }\n    h1   { color: #1a1a2e; }\n    h2   { color: #16213e; margin-top: 30px; }\n    table{ border-collapse: collapse; width: 100%; margin-top: 10px; }\n    th   { background: #16213e; color: white; padding: 8px 12px; text-align: left; }\n    td   { border: 1px solid #ddd; padding: 8px 12px; }\n    tr:nth-child(even){ background: #f4f4f4; }\n    .badge-ok  { background:#d4edda; color:#155724; padding:3px 8px; border-radius:4px; }\n    .badge-err { background:#f8d7da; color:#721c24; padding:3px 8px; border-radius:4px; }\n  </style>\n</head>\n<body>\n  <h1>🛡️ Kubernetes Cluster Health Report</h1>\n  <p><strong>Generated:</strong> ${now}</p>\n  <p><strong>Cluster Endpoint:</strong> ${ process.env.K8S_API_URL || 'N/A' }</p>\n  <p><strong>Overall Status:</strong> <span class='${severity.includes('ACTION') ? 'badge-err' : 'badge-ok'}'>${severity}</span></p>\n  <p><strong>Namespaces:</strong> ${namespaces.join(', ')}</p>\n\n  <h2>📦 Node Summary (${clusterNodes.length} total, ${unhealthyNodes.length} unhealthy)</h2>\n  <table>\n    <tr><th>Node</th><th>Role</th><th>Status</th><th>CPU (allocatable)</th><th>Memory (allocatable)</th><th>OS</th></tr>\n    ${nodeRows}\n  </table>\n\n  <h2>⚠️ Failed / Pending Pods (${failedPods.length} issues)</h2>\n  <table>\n    <tr><th>Namespace</th><th>Pod Name</th><th>Phase</th><th>Reason</th><th>Restarts</th></tr>\n    ${podRows}\n  </table>\n\n  <h2>🚀 Deployments (${deployments.length} total)</h2>\n  <table>\n    <tr><th>Namespace</th><th>Deployment</th><th>Desired</th><th>Ready</th><th>Health</th></tr>\n    ${depRows}\n  </table>\n\n  <hr/>\n  <p style='font-size:12px;color:#666'>This report is auto-generated by n8n. Do not reply to this email.</p>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    subject: `[K8s Health] ${severity} — ${now}`,\n    html,\n    severity,\n    unhealthyNodes: unhealthyNodes.length,\n    failedPods: failedPods.length\n  }\n}];\n"
+      },
+      "id": "build-report",
+      "name": "Build HTML Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 380]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.severity }}",
+              "rightValue": "ACTION REQUIRED",
+              "operator": { "type": "string", "operation": "contains" }
+            }
+          ]
+        }
+      },
+      "id": "check-severity",
+      "name": "Issues Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1180, 380]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail":   "={{ $env.L3_TEAM_EMAIL }}",
+        "subject":   "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html":      "={{ $json.html }}",
+        "options":   { "ccEmail": "={{ $env.L3_CC_EMAIL }}" }
+      },
+      "id": "send-alert-email",
+      "name": "Send ALERT Email to L3",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1420, 260],
+      "credentials": { "smtp": { "id": "smtp-l3-team", "name": "smtp-l3-team" } }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail":   "={{ $env.L3_TEAM_EMAIL }}",
+        "subject":   "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html":      "={{ $json.html }}"
+      },
+      "id": "send-ok-email",
+      "name": "Send OK Report to L3",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1420, 500],
+      "credentials": { "smtp": { "id": "smtp-l3-team", "name": "smtp-l3-team" } }
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [[
+        { "node": "Get All Nodes",          "type": "main", "index": 0 },
+        { "node": "Get Failed/Pending Pods","type": "main", "index": 0 },
+        { "node": "Get Deployments",        "type": "main", "index": 0 },
+        { "node": "Get Namespaces",         "type": "main", "index": 0 }
+      ]]
+    },
+    "Get All Nodes":          { "main": [[{ "node": "Merge All Data", "type": "main", "index": 0 }]] },
+    "Get Failed/Pending Pods":{ "main": [[{ "node": "Merge All Data", "type": "main", "index": 1 }]] },
+    "Get Deployments":        { "main": [[{ "node": "Merge All Data", "type": "main", "index": 2 }]] },
+    "Get Namespaces":         { "main": [[{ "node": "Merge All Data", "type": "main", "index": 3 }]] },
+    "Merge All Data":         { "main": [[{ "node": "Build HTML Report", "type": "main", "index": 0 }]] },
+    "Build HTML Report":      { "main": [[{ "node": "Issues Found?", "type": "main", "index": 0 }]] },
+    "Issues Found?": {
+      "main": [
+        [{ "node": "Send ALERT Email to L3", "type": "main", "index": 0 }],
+        [{ "node": "Send OK Report to L3",   "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true, "callerPolicy": "workflowsFromSameOwner" },
+  "staticData": null,
+  "tags": ["kubernetes", "healthcheck", "ops", "l3"],
+  "triggerCount": 1,
+  "meta": { "templateCredsSetupCompleted": false }
+}
