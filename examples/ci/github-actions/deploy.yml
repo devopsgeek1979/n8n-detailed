@@ -1,0 +1,30 @@
+name: n8n-workflows-deploy
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "workflows/**"
+      - "examples/ci/github-actions/deploy.yml"
+
+jobs:
+  validate-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate workflow files exist
+        run: |
+          if [ ! -d workflows ]; then
+            echo "No workflows directory found"
+            exit 1
+          fi
+
+      - name: Placeholder deploy step
+        env:
+          N8N_API_URL: ${{ secrets.N8N_API_URL }}
+          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+        run: |
+          echo "Implement API-based workflow import/deploy here"
+          echo "Target: $N8N_API_URL"

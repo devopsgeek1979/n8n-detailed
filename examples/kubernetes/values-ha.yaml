@@ -1,0 +1,47 @@
+image:
+  repository: n8nio/n8n
+  tag: latest
+
+main:
+  enabled: true
+  replicaCount: 1
+
+worker:
+  enabled: true
+  replicaCount: 2
+
+config:
+  database:
+    type: postgresdb
+  queue:
+    mode: redis
+
+env:
+  N8N_ENCRYPTION_KEY: "replace-with-strong-random-value"
+  N8N_HOST: "n8n.example.com"
+  N8N_PROTOCOL: "https"
+
+redis:
+  enabled: true
+
+postgresql:
+  enabled: false
+
+externalPostgresql:
+  host: "postgres.example.com"
+  port: 5432
+  database: "n8n"
+  username: "n8n"
+  existingSecret: "n8n-postgres-secret"
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: n8n.example.com
+      paths:
+        - /
+  tls:
+    - secretName: n8n-tls
+      hosts:
+        - n8n.example.com
