@@ -50,23 +50,33 @@ By the end of this journey, you will have:
 
 Each phase builds on the previous one, progressing from foundational concepts to enterprise-ready production systems.
 
-| Phase | Focus | You'll Learn | Time |
-| --- | --- | --- | --- |
-| **1** | Foundations | n8n concepts, triggers, data flows, expressions | 2-3h |
-| **2** | Install & Setup | Docker, Docker Compose, PostgreSQL, NGINX | 1-2h |
-| **3** | Security | Encryption, OAuth, webhook security, auth patterns | 2h |
-| **4** | Core Workflows | ETL, conditionals, loops, error handling | 4-5h |
-| **5** | Advanced Integrations | APIs, pagination, file processing, code nodes | 3-4h |
-| **6** | AI Agents | LLMs, agent patterns, memory, function calling | 4h |
-| **7** | Administration | Queue mode, workers, logs, backup strategies | 3h |
-| **8** | Scaling & HA | Kubernetes, Helm, multi-worker, load balancing | 3-4h |
-| **9** | Troubleshooting | Debugging, real-world failure scenarios | 2h |
-| **10** | Custom Nodes | TypeScript, custom integrations, packaging | 4h |
-| **11** | Testing & CI/CD | Git workflows, GitHub Actions, IaC (Terraform) | 3h |
+| Phase | Focus | You'll Learn | Time | Click to Open |
+| --- | --- | --- | --- | --- |
+| **1** | Foundations | n8n concepts, triggers, data flows, expressions | 2-3h | [Phase 1 Doc](docs/phases/phase-01-foundations.md) |
+| **2** | Install & Setup | Docker, Docker Compose, PostgreSQL, NGINX | 1-2h | [Phase 2 Doc](docs/phases/phase-02-installation-environment.md) |
+| **3** | Security | Encryption, OAuth, webhook security, auth patterns | 2h | [Phase 3 Doc](docs/phases/phase-03-security-authentication.md) |
+| **4** | Core Workflows | ETL, conditionals, loops, error handling | 4-5h | [Phase 4 Doc](docs/phases/phase-04-workflow-development.md) |
+| **5** | Advanced Integrations | APIs, pagination, file processing, code nodes | 3-4h | [Phase 5 Doc](docs/phases/phase-05-advanced-nodes-integrations.md) |
+| **6** | AI Agents | LLMs, agent patterns, memory, function calling | 4h | [Phase 6 Doc](docs/phases/phase-06-ai-agents-automation.md) |
+| **7** | Administration | Queue mode, workers, logs, backup strategies | 3h | [Phase 7 Doc](docs/phases/phase-07-administration-operations.md) |
+| **8** | Scaling & HA | Kubernetes, Helm, multi-worker, load balancing | 3-4h | [Phase 8 Doc](docs/phases/phase-08-scaling-high-availability.md) |
+| **9** | Troubleshooting | Debugging, real-world failure scenarios | 2h | [Phase 9 Doc](docs/phases/phase-09-troubleshooting-debugging.md) |
+| **10** | Custom Nodes | TypeScript, custom integrations, packaging | 4h | [Phase 10 Doc](docs/phases/phase-10-custom-development.md) |
+| **11** | Testing & CI/CD | Git workflows, GitHub Actions, IaC (Terraform) | 3h | [Phase 11 Doc](docs/phases/phase-11-testing-cicd.md) |
 
 **Total estimated time: 30-35 hours** (Adjust based on your background and pace)
 
-👉 **Start Here:** `docs/END_TO_END_GUIDE.md` for a complete milestone roadmap, or jump to `docs/phases/` for individual phase deep-dives.
+👉 **Start Here:** [End-to-End Guide](docs/END_TO_END_GUIDE.md) for a complete milestone roadmap, or jump to [All Phase Docs](docs/phases/) for individual phase deep-dives.
+
+### 🔥 Quick Learning Links (Click by Goal)
+
+- **Beginner Path:** [Phase 1 - Foundations](docs/phases/phase-01-foundations.md) → [Phase 2 - Installation & Environment](docs/phases/phase-02-installation-environment.md) → [Phase 3 - Security & Authentication](docs/phases/phase-03-security-authentication.md)
+- **Workflow Builder Path:** [Phase 4 - Workflow Development](docs/phases/phase-04-workflow-development.md) → [Phase 5 - Advanced Nodes & Integrations](docs/phases/phase-05-advanced-nodes-integrations.md)
+- **AI Automation Path:** [Phase 6 - AI Agents & Automation](docs/phases/phase-06-ai-agents-automation.md)
+- **DevOps / SRE Path:** [Phase 7 - Administration & Operations](docs/phases/phase-07-administration-operations.md) → [Phase 8 - Scaling & HA](docs/phases/phase-08-scaling-high-availability.md) → [Phase 11 - Testing & CI/CD](docs/phases/phase-11-testing-cicd.md)
+- **Troubleshooting Path:** [Phase 9 - Troubleshooting & Debugging](docs/phases/phase-09-troubleshooting-debugging.md)
+- **Custom Extension Path:** [Phase 10 - Custom Development](docs/phases/phase-10-custom-development.md)
+- **Full highlighted index with descriptions:** [Docs Highlighted Index](docs/HIGHLIGHTED_DOCS_INDEX.md)
 
 ---
 
@@ -130,7 +140,8 @@ docker compose -f examples/docker-compose/docker-compose.yml --env-file .env up 
 ```
 
 **What just started:**
-- **n8n** (http://localhost) — the workflow editor
+
+- **n8n** ([http://localhost](http://localhost)) — the workflow editor
 - **PostgreSQL** — durable metadata store
 - **NGINX** — reverse proxy (production pattern)
 
@@ -139,6 +150,7 @@ docker compose -f examples/docker-compose/docker-compose.yml --env-file .env up 
 Open [http://localhost](http://localhost) in your browser.
 
 **Default credentials** (from `.env.example`):
+
 - Username: `admin`
 - Password: `change-me`
 
@@ -180,7 +192,7 @@ Choose your platform and installation method:
 - 📦 **Binary** — No dependencies approach
 - 🐧 **WSL2 + Docker** — Linux-like environment on Mac
 
-👉 **Full guide:** `docs/INSTALL_macOS.md`
+👉 **Full guide:** [macOS Installation Guide](docs/INSTALL_macOS.md)
 
 ### Linux (Ubuntu, Debian, CentOS, RHEL)
 
@@ -189,7 +201,7 @@ Choose your platform and installation method:
 - 🔧 **Systemd Service** — Run as background service
 - 📥 **Binary** — Standalone executable
 
-👉 **Full guide:** `docs/INSTALL_Linux.md`
+👉 **Full guide:** [Linux Installation Guide](docs/INSTALL_Linux.md)
 
 ### Windows (10, 11, Server)
 
@@ -198,19 +210,19 @@ Choose your platform and installation method:
 - 📦 **npm** — Node.js installation
 - 🐧 **WSL2 + npm** — Ubuntu environment within Windows
 
-👉 **Full guide:** `docs/INSTALL_Windows.md`
+👉 **Full guide:** [Windows Installation Guide](docs/INSTALL_Windows.md)
 
 ### Installation Decision Tree
 
 | Your Situation | Recommended Method | Guide |
 | --- | --- | --- |
-| I want the easiest setup, production-ready | Docker Compose | `INSTALL_macOS.md`, `INSTALL_Linux.md` |
-| I'm a developer, want to modify code | npm | `INSTALL_macOS.md`, `INSTALL_Linux.md`, `INSTALL_Windows.md` |
-| I don't have Docker | npm or Binary | `INSTALL_macOS.md`, `INSTALL_Linux.md`, `INSTALL_Windows.md` |
-| I'm on Windows with WSL2 | Docker Desktop + WSL2 | `INSTALL_Windows.md` |
-| I'm on Windows Home (no WSL2) | Docker Desktop or npm | `INSTALL_Windows.md` |
-| I need enterprise HA deployment | Kubernetes + Helm | `docs/deployment/kubernetes-helm.md` |
-| I want Infrastructure as Code | Terraform | `examples/terraform/main.tf` |
+| I want the easiest setup, production-ready | Docker Compose | [macOS](docs/INSTALL_macOS.md), [Linux](docs/INSTALL_Linux.md) |
+| I'm a developer, want to modify code | npm | [macOS](docs/INSTALL_macOS.md), [Linux](docs/INSTALL_Linux.md), [Windows](docs/INSTALL_Windows.md) |
+| I don't have Docker | npm or Binary | [macOS](docs/INSTALL_macOS.md), [Linux](docs/INSTALL_Linux.md), [Windows](docs/INSTALL_Windows.md) |
+| I'm on Windows with WSL2 | Docker Desktop + WSL2 | [Windows Guide](docs/INSTALL_Windows.md) |
+| I'm on Windows Home (no WSL2) | Docker Desktop or npm | [Windows Guide](docs/INSTALL_Windows.md) |
+| I need enterprise HA deployment | Kubernetes + Helm | [Kubernetes + Helm Guide](docs/deployment/kubernetes-helm.md) |
+| I want Infrastructure as Code | Terraform | [Terraform Example](examples/terraform/main.tf) |
 
 ### System Requirements Summary
 
@@ -223,7 +235,7 @@ Choose your platform and installation method:
 | Windows 10/11 | 6 GB | 10 GB | WSL2 or Docker Desktop |
 | Production (any) | 8-16 GB | 50+ GB | Database + persistent storage |
 
-👉 **Comprehensive installation guide with all methods:** `docs/INSTALLATION.md`
+👉 **Comprehensive installation guide with all methods:** [Installation Master Guide](docs/INSTALLATION.md)
 
 ---
 
@@ -233,7 +245,7 @@ Choose your platform and installation method:
 
 **Scenario:** Sync customer data from Salesforce → PostgreSQL → Data Warehouse
 
-```
+```text
 [Trigger: Webhook] → [API: Fetch Salesforce] → [Transform: Normalize schema]
   → [Load: PostgreSQL] → [Alert: Slack on error]
 ```
@@ -244,7 +256,7 @@ Choose your platform and installation method:
 
 **Scenario:** Monitor 5 microservices health → consolidate status → alert on failure
 
-```
+```text
 [Trigger: Cron every 5 min] → [HTTP Requests in parallel] → [Merge responses]
   → [Check health status] → [Send Slack alert if unhealthy]
 ```
@@ -255,7 +267,7 @@ Choose your platform and installation method:
 
 **Scenario:** New Jira tickets → AI analyzes → auto-assigns priority & assignee
 
-```
+```text
 [Trigger: Jira webhook] → [Extract ticket details] → [Call OpenAI API]
   → [Parse AI response] → [Update Jira with priority & assignee]
 ```
@@ -266,7 +278,7 @@ Choose your platform and installation method:
 
 **Scenario:** Ingest logs from 10+ sources, transform, and index in Elasticsearch
 
-```
+```text
 [Multiple webhooks] → [Queue: Redis] → [Workers: 5 parallel processors]
   → [Batch: Split into chunks] → [Elasticsearch: Index] → [PostgreSQL: Track]
 ```
@@ -279,7 +291,7 @@ Choose your platform and installation method:
 
 ### For Beginners
 
-1. **Start with Phase 1-3** (`docs/phases/phase-01-foundations.md`)
+1. **Start with Phase 1-3** ([Phase 1 Foundations](docs/phases/phase-01-foundations.md))
 2. Deploy local stack (Quick Start above)
 3. Build the 3 hands-on workflows in Phase 1
 4. Move to Phase 2 and 3 for security
@@ -298,7 +310,7 @@ Choose your platform and installation method:
 ### For DevOps/SRE Teams
 
 1. **Focus on Phase 2, 7-11**
-2. Study deployment docs: `docs/deployment/docker-compose-postgres-nginx.md` and Kubernetes
+2. Study deployment docs: [Docker Compose + PostgreSQL + NGINX](docs/deployment/docker-compose-postgres-nginx.md) and [Kubernetes + Helm](docs/deployment/kubernetes-helm.md)
 3. Work through queue mode setup (Phase 7)
 4. Implement monitoring and backups (Phase 7-9)
 5. Terraform + CI/CD pipeline (Phase 11)
@@ -327,7 +339,7 @@ All examples follow security best practices:
 - ✅ **Webhooks**: HMAC signature validation support
 - ✅ **OAuth**: Built-in OAuth2 provider integrations
 
-See `docs/security-hardening-checklist.md` for a complete checklist.
+See [Security Hardening Checklist](docs/security-hardening-checklist.md) for a complete checklist.
 
 ---
 
@@ -355,7 +367,7 @@ docker compose -f examples/docker-compose/docker-compose.yml --env-file .env up 
 helm upgrade --install n8n n8n/n8n -f examples/kubernetes/values-ha.yaml
 ```
 
-See `docs/deployment/kubernetes-helm.md` for detailed setup.
+See [Kubernetes + Helm Deployment Guide](docs/deployment/kubernetes-helm.md) for detailed setup.
 
 ### Option 3: Infrastructure as Code (Terraform)
 
@@ -372,13 +384,14 @@ terraform apply -f examples/terraform/main.tf
 
 | Document | Best For |
 | --- | --- |
-| `docs/END_TO_END_GUIDE.md` | Milestone roadmap & sequencing |
-| `docs/phases/phase-*.md` | Phase-specific deep-dives |
-| `docs/deployment/docker-compose-postgres-nginx.md` | Local & staging setup |
-| `docs/deployment/kubernetes-helm.md` | Production HA architecture |
-| `docs/operations-runbook.md` | Daily operations & incident response |
-| `docs/security-hardening-checklist.md` | Security controls validation |
-| `examples/` | Copy-paste ready code & configs |
+| [End-to-End Guide](docs/END_TO_END_GUIDE.md) | Milestone roadmap & sequencing |
+| [Highlighted Docs Index](docs/HIGHLIGHTED_DOCS_INDEX.md) | Clickable curated list by audience and goal |
+| [All Phase Deep-Dives](docs/phases/) | Phase-specific deep-dives |
+| [Docker Compose Deployment](docs/deployment/docker-compose-postgres-nginx.md) | Local & staging setup |
+| [Kubernetes + Helm Deployment](docs/deployment/kubernetes-helm.md) | Production HA architecture |
+| [Operations Runbook](docs/operations-runbook.md) | Daily operations & incident response |
+| [Security Hardening Checklist](docs/security-hardening-checklist.md) | Security controls validation |
+| [Examples Folder](examples/) | Copy-paste ready code & configs |
 
 ---
 
@@ -415,7 +428,7 @@ A: Yes. All examples follow production best practices. Start with Docker Compose
 A: Absolutely. Phase 5 focuses on custom API integrations.
 
 **Q: How do I get help if I'm stuck?**
-A: Check `docs/operations-runbook.md` and `Phase 9` troubleshooting. Consult n8n docs and community.
+A: Check [Operations Runbook](docs/operations-runbook.md) and [Phase 9 Troubleshooting](docs/phases/phase-09-troubleshooting-debugging.md). Consult n8n docs and community.
 
 ---
 
@@ -435,8 +448,8 @@ This repository is a comprehensive guide for n8n (open-source). n8n is licensed 
 
 1. ✅ Clone this repo
 2. ✅ Run Quick Start above
-3. ✅ Open `docs/END_TO_END_GUIDE.md` for full roadmap
-4. ✅ Start Phase 1: `docs/phases/phase-01-foundations.md`
+3. ✅ Open [End-to-End Guide](docs/END_TO_END_GUIDE.md) for full roadmap
+4. ✅ Start Phase 1: [Foundations](docs/phases/phase-01-foundations.md)
 5. ✅ Share with your team!
 
 **Happy Automating!** 🚀
